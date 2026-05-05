@@ -35,7 +35,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-INFO_API_URL = "https://mahir-info-api.vercel.app/player-info"
+INFO_API_URL = "https://rizerxinfo1234.vercel.app/player-info"
+
 BASE64 = "aHR0cHM6Ly9jZG4uanNkZWxpdnIubmV0L2doL1NoYWhHQ3JlYXRvci9pY29uQG1haW4vUE5H"
 info_URL = base64.b64decode(BASE64).decode("utf-8")
 
@@ -61,7 +62,7 @@ def load_unicode_font(size, font_file=FONT_FILE):
     return ImageFont.load_default()
 
 async def fetch_image_bytes(item_id):
-    if not item_id or str(item_id) == "0":
+    if not item_id or str(item_id) == "0" or str(item_id) == "None":
         return None
     try:
         resp = await client.get(f"{info_URL}/{item_id}.png")
@@ -82,9 +83,9 @@ def process_banner_image(data, avatar_bytes, banner_bytes, pin_bytes):
     banner_img = bytes_to_image(banner_bytes)
     pin_img = bytes_to_image(pin_bytes)
 
-    level = str(data.get("AccountLevel") or "0")
-    name = str(data.get("AccountName") or "Unknown")
-    guild = str(data.get("GuildName") or "")
+    level = str(data.get("level") or "0")
+    name = str(data.get("name") or "Unknown")
+    guild = str(data.get("guild") or "")
 
     TARGET_HEIGHT = 400
 
@@ -169,35 +170,50 @@ def process_banner_image(data, avatar_bytes, banner_bytes, pin_bytes):
 # ================= ROUTES =================
 @app.get("/")
 async def home():
-    return {"status": "Banner API Running", "endpoint": "/banner?uid=UID" "Developer": "A4X M4MU"}
+    return {"status": "Banner API Running", "endpoint": "/banner?uid=UID"}
 
 @app.get("/banner")
 async def get_banner(uid: str):
-    resp = await client.get(f"{INFO_API_URL}?uid={uid}")
-    if resp.status_code != 200:
-        raise HTTPException(502, "Info API Error")
+    url = f"{INFO_API_URL}?uid={uid}"
+    try:
+        resp = await client.get(url)
+        if resp.status_code != 200:
+            raise HTTPException(502, f"Info API returned {resp.status_code}")
+    except Exception as e:
+        raise HTTPException(502, f"Failed to fetch player info: {str(e)}")
 
     data = resp.json()
-    acc = data.get("AccountInfo") or {}
-    eq = data.get("EquippedItemsInfo") or {}
-    gl = data.get("GuildInfo") or {}
 
-    if not acc:
-        raise HTTPException(404, "Account not found")
+    # Extract data from the actual API response structure
+    basic_info = data.get("basicInfo") or {}
+    profile_info = data.get("profileInfo") or {}
+    clan_info = data.get("clanBasicInfo") or {}
 
+    name = basic_info.get("nickname")
+    level = basic_info.get("level")
+    guild = clan_info.get("clanName")  # may be None if no clan
+    # Fixed: use headPic for avatar, not avatarId
+    avatar_id = basic_info.get("headPic")
+    banner_id = basic_info.get("bannerId")
+    pin_id = basic_info.get("pinId")
+
+    if not name:
+        raise HTTPException(404, "Account not found or invalid response from info API")
+
+    # Fetch images using the extracted IDs
     avatar, banner, pin = await asyncio.gather(
-        fetch_image_bytes(eq.get("EquippedAvatarId")),
-        fetch_image_bytes(eq.get("EquippedBannerId")),
-        fetch_image_bytes(eq.get("pinId")),
+        fetch_image_bytes(avatar_id),
+        fetch_image_bytes(banner_id),
+        fetch_image_bytes(pin_id),
     )
 
     img = await asyncio.get_event_loop().run_in_executor(
         process_pool,
         process_banner_image,
         {
-            "AccountLevel": acc.get("AccountLevel"),
-            "AccountName": acc.get("AccountName"),
-            "GuildName": gl.get("GuildName"),
+            "level": level,
+            "name": name,
+            "guild": guild,
         },
         avatar, banner, pin
     )
