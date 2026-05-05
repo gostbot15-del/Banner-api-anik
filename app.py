@@ -87,7 +87,7 @@ def process_banner_image(data, avatar_bytes, banner_bytes, pin_bytes):
     name = str(data.get("name") or "Unknown")
     guild = str(data.get("guild") or "")
 
-    TARGET_HEIGHT = 400
+    TARGET_HEIGHT = 300
 
     zoom_size = int(TARGET_HEIGHT * AVATAR_ZOOM)
     avatar_img = avatar_img.resize((zoom_size, zoom_size), Image.LANCZOS)
